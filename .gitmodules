@@ -1,0 +1,4 @@
+[submodule "kinova-ros"]
+	path = kinova-ros
+	url = https://github.com/Kinovarobotics/kinova-ros.git
+	branch = jaco-ros-master

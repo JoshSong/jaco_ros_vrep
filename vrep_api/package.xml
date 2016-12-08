@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<package>
+  <name>vrep_api</name>
+  <version>0.0.0</version>
+  <description>V-REP C++ remote api as a catkin package</description>
+  <maintainer email="joshua@todo.todo">joshua</maintainer>
+  <license>TODO</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <build_depend>roscpp</build_depend>
+  <run_depend>roscpp</run_depend>
+</package>
