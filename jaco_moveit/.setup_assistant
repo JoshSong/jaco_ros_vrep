@@ -1,0 +1,10 @@
+moveit_setup_assistant_config:
+  URDF:
+    package: jaco_control
+    relative_path: urdf/jaco_arm.urdf
+  SRDF:
+    relative_path: config/jaco.srdf
+  CONFIG:
+    author_name: Joshua Song
+    author_email: js-web@outlook.com
+    generated_timestamp: 1481162186
