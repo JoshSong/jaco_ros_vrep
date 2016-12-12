@@ -7,17 +7,10 @@
   <arg name="sim" default="true" />
   <param name="use_sim_time" value="$(arg sim)" />
   <arg name="rviz" default="true" />
-  <arg name="torque_mode" default="false" />
 
   <include file="$(find jaco_moveit)/launch/planning_context.launch" >
     <arg name="load_robot_description" value="true" />
   </include>
-
-  <group if="$(arg sim)">
-    <node name="vrep_interface" pkg="jaco_control" type="vrep_interface" output="screen">
-        <param name="torque_mode" value="$(arg torque_mode)" />
-    </node>
-  </group>
 
   <!-- TODO real robot interface: robot_state, motion_interface, and joint_trajectory_action nodes -->
   <group unless="$(arg sim)">

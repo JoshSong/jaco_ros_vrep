@@ -34,7 +34,7 @@ VrepInterface::VrepInterface(ros::NodeHandle& n) :
     jointDirs_ = {-1, 1, -1, -1, -1, -1};
 
     // Connect to V-REP via remote api
-    ROS_INFO("Waiting for valid time");
+    ROS_INFO("Waiting for valid time. Is V-REP running?");
     ros::Time::waitForValid();
     while(clientID_ == -1 && ros::ok()) {
         clientID_ = simxStart((simxChar*)"127.0.0.1",19999,true,true,2000,5);

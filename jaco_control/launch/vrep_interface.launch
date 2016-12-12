@@ -1,0 +1,10 @@
+<launch>
+
+  <param name="use_sim_time" value="true" />
+  <arg name="torque_mode" default="false" />
+
+  <node name="vrep_interface" pkg="jaco_control" type="vrep_interface" output="screen">
+    <param name="torque_mode" value="$(arg torque_mode)" />
+  </node>
+
+</launch>
