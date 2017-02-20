@@ -52,8 +52,23 @@ VrepInterface::VrepInterface(ros::NodeHandle& n) :
     }
 
     // Initialise jointState_ message with joint names and get V-REP handles
-    initJoints(vrepArmPrefix, urdfArmPrefix, numArmJoints_);
-    initJoints(vrepFingerPrefix, urdfFingerPrefix, numFingerJoints_);
+    bool success = initJoints(vrepArmPrefix, urdfArmPrefix, numArmJoints_,
+            jointState_, jointHandles_);
+    success = success && initJoints(vrepFingerPrefix, urdfFingerPrefix,
+            numFingerJoints_, jointState_, jointHandles_);
+    if (!success) {
+        ROS_WARN_STREAM("initJoints failed, trying suffix #0");
+        jointState_ = sensor_msgs::JointState();
+        jointHandles_.clear();
+        success = initJoints(vrepArmPrefix, urdfArmPrefix, numArmJoints_,
+                jointState_, jointHandles_, 0);
+        success = success && initJoints(vrepFingerPrefix, urdfFingerPrefix,
+                numFingerJoints_, jointState_, jointHandles_, 0);
+        if (!success) {
+            ROS_ERROR_STREAM("initJoints failed.");
+            return;
+        }
+    }
 
     // Initialise feedback message */
     for (int i = 0; i < numArmJoints_; i++) {
@@ -162,27 +177,38 @@ void VrepInterface::trajCB(
     }
 }
 
-void VrepInterface::initJoints(std::string inPrefix, std::string outPrefix,
-        int numJoints) {
+bool VrepInterface::initJoints(std::string inPrefix, std::string outPrefix,
+        int numJoints, sensor_msgs::JointState& jointState,
+        std::vector<int>& jointHandles, int suffixCode) {
     for (int i = 0; i < numJoints; i++) {
         // Get V-REP handle
-        std::string inName = inPrefix + std::to_string(i + 1);
+        std::string inName;
+        if (suffixCode == -1) {
+            inName = inPrefix + std::to_string(i + 1);
+        } else {
+            inName = inPrefix + std::to_string(i + 1) + "#" + std::to_string(suffixCode);
+        }
         int handle;
-        simxGetObjectHandle(clientID_, inName.c_str(), &handle,
+        int code = simxGetObjectHandle(clientID_, inName.c_str(), &handle,
                 simx_opmode_blocking);
-        jointHandles_.push_back(handle);
+        if (code != simx_return_ok) {
+            ROS_ERROR_STREAM("Get handle " << inName << " failed, code: " << code);
+            return false;
+        }
+        jointHandles.push_back(handle);
 
         // Ask V-REP to send joint angles continuously from now on
         float pos;
         simxGetJointPosition(clientID_, handle, &pos, simx_opmode_streaming);
 
-        // Add joint's urdf name to jointState_ msg
+        // Add joint's urdf name to jointState msg
         std::string outName = outPrefix + std::to_string(i + 1);
-        jointState_.name.push_back(outName);
-        jointState_.position.push_back(pos);
-        jointState_.velocity.push_back(0);
-        jointState_.effort.push_back(0);
+        jointState.name.push_back(outName);
+        jointState.position.push_back(pos);
+        jointState.velocity.push_back(0);
+        jointState.effort.push_back(0);
     }
+    return true;
 }
 
 void VrepInterface::torqueCallback(
@@ -211,11 +237,12 @@ std::vector<double> VrepInterface::getVrepPosition() {
     std::vector<double> result(numArmJoints_);
     for (int i = 0; i < numArmJoints_; i++) {
         float pos;
-        simxGetJointPosition(clientID_, jointHandles_[i], &pos,
+        int code = simxGetJointPosition(clientID_, jointHandles_[i], &pos,
                 simx_opmode_buffer);
-        if (i < numArmJoints_) {
-            pos = jointDirs_[i] * pos + jointOffsets_[i];
+        if (code != simx_return_ok) {
+            ROS_ERROR_STREAM("getVrepPosition error code: " << code);
         }
+        pos = jointDirs_[i] * pos + jointOffsets_[i];
         result[i] = pos;
     }
     return result;

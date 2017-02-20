@@ -33,9 +33,13 @@ public:
     void trajCB(const control_msgs::FollowJointTrajectoryGoalConstPtr &goal);
 
 private:
-    /** Initialises jointStates_ and vrepHandles_ */
-    void initJoints(std::string inPrefix, std::string outPrefix,
-            int numJoints);
+    /** Initialises jointStates and jointHandles. Return true if success.
+     *  Part of the process is getting V-REP handles. The suffixCode can be
+     *  given, which should match the number after # if used.
+     */
+    bool initJoints(std::string inPrefix, std::string outPrefix, int numJoints,
+            sensor_msgs::JointState& jointState, std::vector<int>& jointHandles,
+            int suffixCode = -1);
 
     /** Callback for target torques (torque mode) */
     void torqueCallback(const std_msgs::Float64MultiArray::ConstPtr& msg);
