@@ -8,8 +8,13 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   sensor_msgs
   control_msgs
+  visualization_msgs
   actionlib
   vrep_api
+  interactive_markers
+  moveit_core
+  moveit_ros_planning
+  moveit_ros_planning_interface
 )
 
 catkin_package(
@@ -18,8 +23,13 @@ catkin_package(
     roscpp
     sensor_msgs
     control_msgs
+    visualization_msgs
     actionlib
     vrep_api
+    interactive_markers
+    moveit_core
+    moveit_ros_planning
+    moveit_ros_planning_interface
 )
 
 include_directories(
@@ -28,6 +38,9 @@ include_directories(
 
 add_executable(vrep_interface src/VrepInterface.cpp)
 target_link_libraries(vrep_interface ${catkin_LIBRARIES})
+
+add_executable(force_control src/ForceControl.cpp)
+target_link_libraries(force_control ${catkin_LIBRARIES})
 
 #add_executable(jaco_human_playback src/JacoHumanPlayback.cpp)
 #target_link_libraries(jaco_human_playback ${catkin_LIBRARIES} )

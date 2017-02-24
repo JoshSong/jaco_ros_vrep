@@ -10,13 +10,23 @@
   <build_depend>roscpp</build_depend>
   <build_depend>sensor_msgs</build_depend>
   <build_depend>control_msgs</build_depend>
+  <build_depend>visualization_msgs</build_depend>
   <build_depend>actionlib</build_depend>
   <build_depend>vrep_api</build_depend>
+  <build_depend>interactive_markers</build_depend>
+  <build_depend>moveit_core</build_depend>
+  <build_depend>moveit_ros_planning</build_depend>
+  <build_depend>moveit_ros_planning_interface</build_depend>
   <run_depend>roscpp</run_depend>
   <run_depend>sensor_msgs</run_depend>
   <run_depend>control_msgs</run_depend>
+  <run_depend>visualization_msgs</run_depend>
   <run_depend>actionlib</run_depend>
   <run_depend>vrep_api</run_depend>
+  <run_depend>interactive_markers</run_depend>
+  <run_depend>moveit_core</run_depend>
+  <run_depend>moveit_ros_planning</run_depend>
+  <run_depend>moveit_ros_planning_interface</run_depend>
 
   <export>
   </export>
