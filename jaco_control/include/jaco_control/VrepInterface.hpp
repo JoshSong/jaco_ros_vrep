@@ -61,7 +61,7 @@ private:
             const std::vector<double>& current, double alpha);
 
     /** ROS actionlib server for trajectory commands */
-    actionlib::SimpleActionServer<control_msgs::FollowJointTrajectoryAction> trajAS_;
+    std::unique_ptr<actionlib::SimpleActionServer<control_msgs::FollowJointTrajectoryAction>> trajAS_;
 
     /** VREP connection id */
     int clientID_;

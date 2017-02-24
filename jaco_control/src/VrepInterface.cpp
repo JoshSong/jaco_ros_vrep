@@ -13,8 +13,8 @@ extern "C" {
 VrepInterface::VrepInterface(ros::NodeHandle& n) :
         numArmJoints_(6), numFingerJoints_(3), feedbackRate_(50.0),
         posUpdateRate_(50.0), clientID_(-1),
-        sync_(false), targetTorques_(numArmJoints_, 0.0),
-        trajAS_(n, "joint_trajectory_action", boost::bind(&VrepInterface::trajCB, this, _1), false) {
+        sync_(false) {
+    targetTorques_ = std::vector<double>(numArmJoints_, 0.0);
 
     // Get params
     ros::NodeHandle private_node("~");
@@ -90,7 +90,9 @@ VrepInterface::VrepInterface(ros::NodeHandle& n) :
     ROS_INFO("VrepInterface initialised");
 
     // Start action servers
-    trajAS_.start();
+    trajAS_.reset(new actionlib::SimpleActionServer<control_msgs::FollowJointTrajectoryAction>(
+            n, "joint_trajectory_action", boost::bind(&VrepInterface::trajCB, this, _1), false));
+    trajAS_->start();
 }
 
 void VrepInterface::publishWorker(const ros::WallTimerEvent& e) {
@@ -118,8 +120,8 @@ void VrepInterface::trajCB(
     int i = 0;
     while (ros::ok()) {
         // Check that preempt has not been requested by the client
-        if (trajAS_.isPreemptRequested()) {
-            trajAS_.setPreempted();
+        if (trajAS_->isPreemptRequested()) {
+            trajAS_->setPreempted();
             break;
         }
 
@@ -145,11 +147,11 @@ void VrepInterface::trajCB(
             ros::Duration timeTolerance(std::max(goal->goal_time_tolerance.toSec(), 0.1));
             if (reachedGoal) {
                 result.error_code = result.SUCCESSFUL;
-                trajAS_.setSucceeded(result);
+                trajAS_->setSucceeded(result);
                 break;
             } else if (fromStart > points[i].time_from_start + timeTolerance) {
                 result.error_code = result.GOAL_TOLERANCE_VIOLATED;
-                trajAS_.setAborted(result);
+                trajAS_->setAborted(result);
                 break;
             }
             target = points[i].positions;
@@ -234,7 +236,7 @@ void VrepInterface::publishJointInfo() {
 }
 
 std::vector<double> VrepInterface::getVrepPosition() {
-    std::vector<double> result(numArmJoints_);
+    std::vector<double> result(numArmJoints_, 0.0);
     for (int i = 0; i < numArmJoints_; i++) {
         float pos;
         int code = simxGetJointPosition(clientID_, jointHandles_[i], &pos,
