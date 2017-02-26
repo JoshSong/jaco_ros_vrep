@@ -24,7 +24,7 @@
 class VrepInterface {
 
 public:
-    typedef std::vector<double> (*TorqueCallback)(
+    typedef std::vector<float> (*TorqueCallback)(
             const sensor_msgs::JointState& jointState);
 
     VrepInterface();
@@ -58,11 +58,11 @@ private:
 
     /** V-REP remote api wrappers */
     /** Get current joint positions */
-    std::vector<double> getVrepPosition();
+    std::vector<float> getVrepPosition();
     /** Set joint torques */
-    void setVrepTorque(const std::vector<double>& torques);
+    void setVrepTorque(const std::vector<float>& torques);
     /** Set joint positions */
-    void setVrepPosition(const std::vector<double>& pos);
+    void setVrepPosition(const std::vector<float>& pos);
     /** Disable V-REP's joint position controller */
     void disableVrepControl();
     /** Enable V-REP's joint position controller */
@@ -79,11 +79,13 @@ private:
     /** VREP handles of arm joints */
     std::vector<int> jointHandles_;
     /** Offsets in radians to make urdf match simulated arm in VREP */
-    std::vector<double> jointOffsets_;
+    std::vector<float> jointOffsets_;
     /** Direction modifiers for joints that rotate in the opposite direction */
     std::vector<int> jointDirs_;
-    /** Maximum torque values for torque mode */
-    std::vector<double> maxTorques_;
+    /** Maximum torque values for torque mode in Nm */
+    std::vector<float> maxTorques_;
+    /** Maximum joint velocity values for torque mode in rad/s */
+    std::vector<float> maxVels_;
 
     /** Publisher for transformed current joint states */
     ros::Publisher jointPub_;

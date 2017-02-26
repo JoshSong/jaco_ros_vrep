@@ -84,9 +84,9 @@ void createMarker(const geometry_msgs::Point startPos) {
     server->applyChanges();
 }
 
-std::vector<double> calcTorque(const sensor_msgs::JointState& jointState) {
+std::vector<float> calcTorque(const sensor_msgs::JointState& jointState) {
     if (!moveitReady) {
-        return std::vector<double>();
+        return std::vector<float>();
     }
 
     // Calculate jacobian for joint state
@@ -100,15 +100,15 @@ std::vector<double> calcTorque(const sensor_msgs::JointState& jointState) {
 
     // Calculate force
     Eigen::VectorXd force = Eigen::VectorXd::Zero(6);
-    double kp = 100;
+    float kp = 50;
     force(0) = kp * (goal.x - eef.translation().x());
     force(1) = kp * (goal.y - eef.translation().y());
     force(2) = kp * (goal.z - eef.translation().z());
 
     // Convert force to joint torques
     Eigen::VectorXd torque = jt * force;
-
-    return std::vector<double>(torque.data(), torque.data() + torque.size());
+    Eigen::VectorXf torquef = torque.cast<float>();
+    return std::vector<float>(torque.data(), torque.data() + torque.size());
 }
 
 int main(int argc, char** argv) {

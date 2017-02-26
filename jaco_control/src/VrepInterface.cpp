@@ -18,7 +18,12 @@ VrepInterface::VrepInterface() :
     jointOffsets_ = {M_PI, -1.5 * M_PI, 0.5 * M_PI, M_PI, M_PI, 1.5 * M_PI};
     jointDirs_ = {-1, 1, -1, -1, -1, -1};
 
-    maxTorques_ = {15.0, 15.0, 15.0, 4.0, 4.0, 4.0};
+    maxTorques_ = {15.f, 15.f, 15.f, 4.f, 4.f, 4.f};
+    maxVels_ = {48.f, 48.f, 48.f, 60.f, 60.f, 60.f};
+    for (std::size_t i = 0; i < maxVels_.size(); i++) {
+        maxVels_[i] *= M_PI/180.f;
+    }
+
 }
 
 void VrepInterface::setTorqueMode(TorqueCallback calcTorque) {
@@ -103,7 +108,7 @@ void VrepInterface::publishWorker(const ros::WallTimerEvent& e) {
     updateJointState();
     publishJointInfo();
     if (torqueMode_) {
-        std::vector<double> torques = calcTorque_(jointState_);
+        std::vector<float> torques = calcTorque_(jointState_);
         if (!torques.empty()) {
             setVrepTorque(torques);
         }
@@ -138,7 +143,7 @@ void VrepInterface::trajCB(
             // Should've reached goal by now
             bool reachedGoal = true;
             for (std::size_t j = 0; j < numArmJoints_; j++) {
-                double tolerance = 0.1;
+                float tolerance = 0.1;
                 if (goal->goal_tolerance.size() > 0) {
                     tolerance = goal->goal_tolerance[j].position;
                 }
@@ -173,11 +178,14 @@ void VrepInterface::trajCB(
                 target = points[i].positions;
             } else {
                 ros::Duration d = fromStart - points[i].time_from_start;
-                double alpha = d.toSec() / segmentDuration.toSec();
+                float alpha = d.toSec() / segmentDuration.toSec();
                 target = interpolate(prev, points[i].positions, alpha);
             }
         }
-        setVrepPosition(target);
+        // Cast to from doubles to floats
+        std::vector<float> targetf(target.begin(), target.end());
+
+        setVrepPosition(targetf);
         posUpdateRate_.sleep();
     }
 }
@@ -217,7 +225,7 @@ bool VrepInterface::initJoints(std::string inPrefix, std::string outPrefix,
 }
 
 void VrepInterface::updateJointState() {
-    std::vector<double> pos = getVrepPosition();
+    std::vector<float> pos = getVrepPosition();
     for (int i = 0; i < numArmJoints_; i++) {
         jointState_.position[i] = pos[i];
     }
@@ -233,8 +241,8 @@ void VrepInterface::publishJointInfo() {
     feedbackPub_.publish(feedback_);
 }
 
-std::vector<double> VrepInterface::getVrepPosition() {
-    std::vector<double> result(numArmJoints_, 0.0);
+std::vector<float> VrepInterface::getVrepPosition() {
+    std::vector<float> result(numArmJoints_, 0.0);
     for (int i = 0; i < numArmJoints_; i++) {
         float pos;
         int code = simxGetJointPosition(clientID_, jointHandles_[i], &pos,
@@ -248,16 +256,16 @@ std::vector<double> VrepInterface::getVrepPosition() {
     return result;
 }
 
-void VrepInterface::setVrepTorque(const std::vector<double>& targets) {
+void VrepInterface::setVrepTorque(const std::vector<float>& targets) {
     for (int i = 0; i < numArmJoints_; i++) {
-        double torque = std::max(maxTorques_[i], std::abs(targets[i]));
+        float torque = std::max(maxTorques_[i], std::abs(targets[i]));
         simxSetJointForce(clientID_, jointHandles_[i], torque,
                 simx_opmode_oneshot);
-        double velDir;
+        float velDir;
         if (targets[i] < 0) {
-            velDir = -10000 * jointDirs_[i];
+            velDir = -maxVels_[i] * jointDirs_[i];
         } else if (targets[i] > 0) {
-            velDir = 10000 * jointDirs_[i];
+            velDir = maxVels_[i] * jointDirs_[i];
         } else {
             velDir = 0;
         }
@@ -266,7 +274,7 @@ void VrepInterface::setVrepTorque(const std::vector<double>& targets) {
     }
 }
 
-void VrepInterface::setVrepPosition(const std::vector<double>& targets) {
+void VrepInterface::setVrepPosition(const std::vector<float>& targets) {
     for (int i = 0; i < numArmJoints_; i++) {
         // Transform to V-REP convention
         float target = jointDirs_[i] * (targets[i] - jointOffsets_[i]);
