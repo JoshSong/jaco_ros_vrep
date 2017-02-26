@@ -10,29 +10,24 @@ extern "C" {
     #include "vrep_api/v_repConst.h"
 }
 
-VrepInterface::VrepInterface(ros::NodeHandle& n) :
+VrepInterface::VrepInterface() :
         numArmJoints_(6), numFingerJoints_(3), feedbackRate_(50.0),
-        posUpdateRate_(50.0), clientID_(-1),
-        sync_(false) {
-    targetTorques_ = std::vector<double>(numArmJoints_, 0.0);
-
-    // Get params
-    ros::NodeHandle private_node("~");
-    private_node.param("torque_mode", torqueMode_, false);
-    ROS_INFO_STREAM("Torque mode: " << torqueMode_);
-    if (torqueMode_) {
-        sync_ = true;
-    }
-
-    std::string vrepArmPrefix = "Jaco_joint";
-    std::string vrepFingerPrefix = "JacoHand_joint1_finger";
-    std::string urdfArmPrefix = "jaco_joint_";
-    std::string urdfFingerPrefix = "jaco_joint_finger_";
-
+        posUpdateRate_(50.0), clientID_(-1), torqueMode_(false), sync_(false),
+        calcTorque_(nullptr) {
     // V-REP joint offsets and directions don't line up with urdf
     jointOffsets_ = {M_PI, -1.5 * M_PI, 0.5 * M_PI, M_PI, M_PI, 1.5 * M_PI};
     jointDirs_ = {-1, 1, -1, -1, -1, -1};
 
+    maxTorques_ = {15.0, 15.0, 15.0, 4.0, 4.0, 4.0};
+}
+
+void VrepInterface::setTorqueMode(TorqueCallback calcTorque) {
+    calcTorque_ = calcTorque;
+    torqueMode_ = true;
+    sync_ = true;
+}
+
+void VrepInterface::initialize(ros::NodeHandle& n) {
     // Connect to V-REP via remote api
     ROS_INFO("Waiting for valid time. Is V-REP running?");
     ros::Time::waitForValid();
@@ -52,6 +47,10 @@ VrepInterface::VrepInterface(ros::NodeHandle& n) :
     }
 
     // Initialise jointState_ message with joint names and get V-REP handles
+    std::string vrepArmPrefix = "Jaco_joint";
+    std::string vrepFingerPrefix = "JacoHand_joint1_finger";
+    std::string urdfArmPrefix = "jaco_joint_";
+    std::string urdfFingerPrefix = "jaco_joint_finger_";
     bool success = initJoints(vrepArmPrefix, urdfArmPrefix, numArmJoints_,
             jointState_, jointHandles_);
     success = success && initJoints(vrepFingerPrefix, urdfFingerPrefix,
@@ -76,18 +75,19 @@ VrepInterface::VrepInterface(ros::NodeHandle& n) :
         feedback_.actual.positions.push_back(0);
     }
 
+    // Disable V-REP's position control loop if in torque mode
+    if (torqueMode_) {
+        disableVrepControl();
+    }
+
     // Initialise ROS subscribers & publishers
     jointPub_ = n.advertise<sensor_msgs::JointState>("joint_states", 1);
     feedbackPub_ = n.advertise<control_msgs::FollowJointTrajectoryFeedback>(
             "feedback_states", 1);
-    if (torqueMode_) {
-        torqueSub_ = n.subscribe("target_torques", 1,
-                &VrepInterface::torqueCallback, this);
-    }
 
     publishWorkerTimer_ = n.createWallTimer(ros::WallDuration(1.0 / feedbackRate_),
             &VrepInterface::publishWorker, this);
-    ROS_INFO("VrepInterface initialised");
+    ROS_INFO("VrepInterface initialized");
 
     // Start action servers
     trajAS_.reset(new actionlib::SimpleActionServer<control_msgs::FollowJointTrajectoryAction>(
@@ -103,7 +103,10 @@ void VrepInterface::publishWorker(const ros::WallTimerEvent& e) {
     updateJointState();
     publishJointInfo();
     if (torqueMode_) {
-        setVrepTorque(targetTorques_);
+        std::vector<double> torques = calcTorque_(jointState_);
+        if (!torques.empty()) {
+            setVrepTorque(torques);
+        }
     }
     if (sync_) {
         simxSynchronousTrigger(clientID_);   // Trigger next simulation step
@@ -213,11 +216,6 @@ bool VrepInterface::initJoints(std::string inPrefix, std::string outPrefix,
     return true;
 }
 
-void VrepInterface::torqueCallback(
-        const std_msgs::Float64MultiArray::ConstPtr& msg) {
-    targetTorques_ = msg->data;
-}
-
 void VrepInterface::updateJointState() {
     std::vector<double> pos = getVrepPosition();
     for (int i = 0; i < numArmJoints_; i++) {
@@ -252,8 +250,9 @@ std::vector<double> VrepInterface::getVrepPosition() {
 
 void VrepInterface::setVrepTorque(const std::vector<double>& targets) {
     for (int i = 0; i < numArmJoints_; i++) {
-        simxSetJointForce(clientID_, jointHandles_[i],
-                std::abs(targets[i]), simx_opmode_oneshot);
+        double torque = std::max(maxTorques_[i], std::abs(targets[i]));
+        simxSetJointForce(clientID_, jointHandles_[i], torque,
+                simx_opmode_oneshot);
         double velDir;
         if (targets[i] < 0) {
             velDir = -10000 * jointDirs_[i];
@@ -276,6 +275,20 @@ void VrepInterface::setVrepPosition(const std::vector<double>& targets) {
     }
 }
 
+void VrepInterface::disableVrepControl() {
+    for (int i = 0; i < numArmJoints_; i++) {
+        simxSetObjectIntParameter(clientID_, jointHandles_[i],
+                sim_jointintparam_ctrl_enabled, 0, simx_opmode_oneshot);
+    }
+}
+
+void VrepInterface::enableVrepControl() {
+    for (int i = 0; i < numArmJoints_; i++) {
+        simxSetObjectIntParameter(clientID_, jointHandles_[i],
+                sim_jointintparam_ctrl_enabled, 1, simx_opmode_oneshot);
+    }
+}
+
 std::vector<double> VrepInterface::interpolate(const std::vector<double>& last,
             const std::vector<double>& current, double alpha) {
     ROS_WARN_STREAM_COND(alpha < 0, "Negative alpha in interpolate? " << alpha);
@@ -288,10 +301,10 @@ std::vector<double> VrepInterface::interpolate(const std::vector<double>& last,
 int main(int argc, char **argv) {
     ros::init(argc, argv, "vrep_interface");
     ros::NodeHandle n;
+    VrepInterface vrep;
+    vrep.initialize(n);
     ros::AsyncSpinner spinner(0);
     spinner.start();
-
-    VrepInterface vrep(n);
     ros::waitForShutdown();
     return 0;
 }

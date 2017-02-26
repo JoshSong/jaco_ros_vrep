@@ -24,7 +24,17 @@
 class VrepInterface {
 
 public:
-    VrepInterface(ros::NodeHandle& n);
+    typedef std::vector<double> (*TorqueCallback)(
+            const sensor_msgs::JointState& jointState);
+
+    VrepInterface();
+
+    /** Set to torque mode. Activates synchronous mode with V-REP.
+     * Requires pointer to function to calculate torques. */
+    void setTorqueMode(TorqueCallback calcTorque);
+
+    /** Connect to V-REP and ROS */
+    void initialize(ros::NodeHandle& n);
 
     /** Publish state info and send commands to V-REP. Executed at a fix rate. */
     void publishWorker(const ros::WallTimerEvent& e);
@@ -41,12 +51,9 @@ private:
             sensor_msgs::JointState& jointState, std::vector<int>& jointHandles,
             int suffixCode = -1);
 
-    /** Callback for target torques (torque mode) */
-    void torqueCallback(const std_msgs::Float64MultiArray::ConstPtr& msg);
-
     /** Get joint info through V-REP remote api and update jointState_ msg */
     void updateJointState();
-    /** Publish joint state/feedback */
+    /** Publish joint state/feedback to ROS */
     void publishJointInfo();
 
     /** V-REP remote api wrappers */
@@ -56,6 +63,10 @@ private:
     void setVrepTorque(const std::vector<double>& torques);
     /** Set joint positions */
     void setVrepPosition(const std::vector<double>& pos);
+    /** Disable V-REP's joint position controller */
+    void disableVrepControl();
+    /** Enable V-REP's joint position controller */
+    void enableVrepControl();
 
     std::vector<double> interpolate( const std::vector<double>& last,
             const std::vector<double>& current, double alpha);
@@ -71,6 +82,8 @@ private:
     std::vector<double> jointOffsets_;
     /** Direction modifiers for joints that rotate in the opposite direction */
     std::vector<int> jointDirs_;
+    /** Maximum torque values for torque mode */
+    std::vector<double> maxTorques_;
 
     /** Publisher for transformed current joint states */
     ros::Publisher jointPub_;
@@ -83,8 +96,6 @@ private:
     /** Stores joint state */
     sensor_msgs::JointState jointState_;
     control_msgs::FollowJointTrajectoryFeedback feedback_;
-    /** Target torques (torque mode) */
-    std::vector<double> targetTorques_;
 
     /** Number of joints in jaco arm = 6 */
     int numArmJoints_;
@@ -100,6 +111,8 @@ private:
 
     /** Torque mode for robot control. */
     bool torqueMode_;
+    /** Pointer to function to calculate torques if using torque mode. */
+    TorqueCallback calcTorque_;
     /** Whether to use synchronous mode with V-REP */
     bool sync_;
 };
