@@ -28,6 +28,7 @@ public:
             const sensor_msgs::JointState& jointState);
 
     VrepInterface();
+    ~VrepInterface();
 
     /** Set to torque mode. Activates synchronous mode with V-REP.
      * Requires pointer to function to calculate torques. */

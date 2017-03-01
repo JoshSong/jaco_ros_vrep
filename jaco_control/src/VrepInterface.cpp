@@ -26,6 +26,12 @@ VrepInterface::VrepInterface() :
 
 }
 
+VrepInterface::~VrepInterface() {
+    if (clientID_ != -1) {
+        simxFinish(clientID_);
+    }
+}
+
 void VrepInterface::setTorqueMode(TorqueCallback calcTorque) {
     calcTorque_ = calcTorque;
     torqueMode_ = true;
