@@ -10,10 +10,12 @@
 #include <interactive_markers/interactive_marker_server.h>
 #include <interactive_markers/menu_handler.h>
 #include <moveit/move_group_interface/move_group.h>
+#include <std_msgs/Float64MultiArray.h>
 #include <sensor_msgs/JointState.h>
 
 #include <vector>
 #include <memory>
+#include <mutex>
 
 using namespace visualization_msgs;
 using namespace interactive_markers;
@@ -24,6 +26,9 @@ const moveit::core::JointModelGroup* jointModelGroup;
 std::unique_ptr<InteractiveMarkerServer> server;
 geometry_msgs::Point goal;
 bool moveitReady = false;
+bool hasGoalForce = false;
+std::vector<double> forceGoal = {0, 0, 0};
+std::mutex forceLock;
 
 void processMarker(const InteractiveMarkerFeedbackConstPtr &feedback) {
     goal = feedback->pose.position;
@@ -85,7 +90,7 @@ void createMarker(const geometry_msgs::Point startPos) {
 }
 
 std::vector<float> calcTorque(const sensor_msgs::JointState& jointState) {
-    if (!moveitReady) {
+    if (!moveitReady or !hasGoalForce) {
         return std::vector<float>();
     }
 
@@ -100,15 +105,29 @@ std::vector<float> calcTorque(const sensor_msgs::JointState& jointState) {
 
     // Calculate force
     Eigen::VectorXd force = Eigen::VectorXd::Zero(6);
+    /*
     float kp = 50;
     force(0) = kp * (goal.x - eef.translation().x());
     force(1) = kp * (goal.y - eef.translation().y());
     force(2) = kp * (goal.z - eef.translation().z());
+    */
+    forceLock.lock();
+    force(0) = forceGoal[0];
+    force(1) = forceGoal[1];
+    force(2) = forceGoal[2];
+    forceLock.unlock();
 
     // Convert force to joint torques
     Eigen::VectorXd torque = jt * force;
     Eigen::VectorXf torquef = torque.cast<float>();
     return std::vector<float>(torque.data(), torque.data() + torque.size());
+}
+
+void forceCb(const std_msgs::Float64MultiArray::ConstPtr& msg) {
+    forceLock.lock();
+    forceGoal = msg->data;
+    hasGoalForce = true;
+    forceLock.unlock();
 }
 
 int main(int argc, char** argv) {
@@ -134,8 +153,11 @@ int main(int argc, char** argv) {
     moveitReady = true;
 
     // Create RVIZ control
-    server.reset(new InteractiveMarkerServer("goal_marker"));
-    createMarker(goal);
+    //server.reset(new InteractiveMarkerServer("goal_marker"));
+    //createMarker(goal);
+
+    // Subcribe to force commands
+    ros::Subscriber forceSub = nh.subscribe("/forces", 1, forceCb);
 
     ros::waitForShutdown();
 }
