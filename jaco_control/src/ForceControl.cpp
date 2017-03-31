@@ -4,9 +4,11 @@
  */
 
 #include "jaco_control/VrepInterface.hpp"
+#include "rbdl_interface/rbdl_interface.hpp"
 
 #include <ros/ros.h>
 #include <ros/console.h>
+#include <ros/package.h>
 #include <interactive_markers/interactive_marker_server.h>
 #include <interactive_markers/menu_handler.h>
 #include <moveit/move_group_interface/move_group.h>
@@ -16,6 +18,9 @@
 #include <vector>
 #include <memory>
 #include <mutex>
+#include <fstream>
+#include <string>
+#include <iostream>
 
 using namespace visualization_msgs;
 using namespace interactive_markers;
@@ -29,6 +34,8 @@ bool moveitReady = false;
 bool hasGoalForce = false;
 std::vector<double> forceGoal = {0, 0, 0};
 std::mutex forceLock;
+
+std::unique_ptr<frapu::RBDLInterface> rbdl;
 
 void processMarker(const InteractiveMarkerFeedbackConstPtr &feedback) {
     goal = feedback->pose.position;
@@ -123,6 +130,10 @@ std::vector<float> calcTorque(const sensor_msgs::JointState& jointState) {
     return std::vector<float>(torque.data(), torque.data() + torque.size());
 }
 
+std::vector<float> calcTorque2(const sensor_msgs::JointState& jointState) {
+
+}
+
 void forceCb(const std_msgs::Float64MultiArray::ConstPtr& msg) {
     forceLock.lock();
     forceGoal = msg->data;
@@ -133,6 +144,16 @@ void forceCb(const std_msgs::Float64MultiArray::ConstPtr& msg) {
 int main(int argc, char** argv) {
     ros::init(argc, argv, "dumb_control");
     ros::NodeHandle nh;
+
+    // Initialize rbdl
+    ROS_INFO_STREAM("Loading rbdl");
+    std::string urdfPath = ros::package::getPath("jaco_control");
+    urdfPath = urdfPath + "/urdf/jaco_arm.urdf";
+    rbdl.reset(new frapu::RBDLInterface);
+    double gravity = 9.81;
+    rbdl->setGravity(gravity);
+    rbdl->load_model(urdfPath);
+    ROS_INFO_STREAM("Loaded rbdl");
 
     // Start V-REP interface
     VrepInterface vrep;
