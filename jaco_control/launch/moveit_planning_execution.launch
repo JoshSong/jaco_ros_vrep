@@ -1,14 +1,14 @@
 <launch>
 
   <!-- Non-standard joint names -->
-  <rosparam command="load" file="$(find jaco_moveit)/config/joint_names.yaml"/>
+  <rosparam command="load" file="$(find j2n6s300_moveit_config)/config/joint_names.yaml"/>
 
   <!-- Connect to a simulated or real robot -->
   <arg name="sim" default="true" />
   <param name="use_sim_time" value="$(arg sim)" />
   <arg name="rviz" default="true" />
 
-  <include file="$(find jaco_moveit)/launch/planning_context.launch" >
+  <include file="$(find j2n6s300_moveit_config)/launch/planning_context.launch" >
     <arg name="load_robot_description" value="true" />
   </include>
 
@@ -19,11 +19,11 @@
   <!-- publish the robot state (tf transforms) -->
   <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" />
 
-  <include file="$(find jaco_moveit)/launch/move_group.launch">
+  <include file="$(find j2n6s300_moveit_config)/launch/move_group.launch">
     <arg name="publish_monitored_planning_scene" value="true" />
   </include>
 
-  <include if="$(arg rviz)" file="$(find jaco_moveit)/launch/moveit_rviz.launch">
+  <include if="$(arg rviz)" file="$(find j2n6s300_moveit_config)/launch/moveit_rviz.launch">
     <arg name="config" value="true"/>
   </include>
 

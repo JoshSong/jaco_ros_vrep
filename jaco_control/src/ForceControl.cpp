@@ -147,8 +147,8 @@ int main(int argc, char** argv) {
 
     // Initialize rbdl
     ROS_INFO_STREAM("Loading rbdl");
-    std::string urdfPath = ros::package::getPath("jaco_control");
-    urdfPath = urdfPath + "/urdf/jaco_arm.urdf";
+    std::string urdfPath = ros::package::getPath("kinova_description");
+    urdfPath = urdfPath + "/urdf/model.urdf";
     rbdl.reset(new frapu::RBDLInterface);
     double gravity = 9.81;
     rbdl->setGravity(gravity);

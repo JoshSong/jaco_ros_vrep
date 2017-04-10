@@ -15,8 +15,10 @@ VrepInterface::VrepInterface() :
         posUpdateRate_(50.0), clientID_(-1), torqueMode_(false), sync_(false),
         calcTorque_(nullptr) {
     // V-REP joint offsets and directions don't line up with urdf
-    jointOffsets_ = {M_PI, -1.5 * M_PI, 0.5 * M_PI, M_PI, M_PI, 1.5 * M_PI};
-    jointDirs_ = {-1, 1, -1, -1, -1, -1};
+    //jointOffsets_ = {M_PI, -1.5 * M_PI, 0.5 * M_PI, M_PI, M_PI, 1.5 * M_PI};
+    //jointDirs_ = {-1, 1, -1, -1, -1, -1};
+    jointOffsets_ = {0, 0, 0, 0, 0, 0};
+    jointDirs_ = {1, 1, 1, 1, 1, 1};
 
     maxTorques_ = {15.f, 15.f, 15.f, 4.f, 4.f, 4.f};
     maxVels_ = {48.f, 48.f, 48.f, 60.f, 60.f, 60.f};
@@ -60,8 +62,8 @@ void VrepInterface::initialize(ros::NodeHandle& n) {
     // Initialise jointState_ message with joint names and get V-REP handles
     std::string vrepArmPrefix = "Jaco_joint";
     std::string vrepFingerPrefix = "JacoHand_joint1_finger";
-    std::string urdfArmPrefix = "jaco_joint_";
-    std::string urdfFingerPrefix = "jaco_joint_finger_";
+    std::string urdfArmPrefix = "j2n6s300_joint_";
+    std::string urdfFingerPrefix = "j2n6s300_joint_finger_";
     bool success = initJoints(vrepArmPrefix, urdfArmPrefix, numArmJoints_,
             jointState_, jointHandles_);
     success = success && initJoints(vrepFingerPrefix, urdfFingerPrefix,
@@ -102,7 +104,7 @@ void VrepInterface::initialize(ros::NodeHandle& n) {
 
     // Start action servers
     trajAS_.reset(new actionlib::SimpleActionServer<control_msgs::FollowJointTrajectoryAction>(
-            n, "joint_trajectory_action", boost::bind(&VrepInterface::trajCB, this, _1), false));
+            n, "/j2n6s300/follow_joint_trajectory", boost::bind(&VrepInterface::trajCB, this, _1), false));
     trajAS_->start();
 }
 
