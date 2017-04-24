@@ -17,6 +17,7 @@ find_package(catkin REQUIRED COMPONENTS
   moveit_ros_planning
   moveit_ros_planning_interface
   rbdl_interface
+  kinova_msgs
 )
 
 catkin_package(
@@ -35,6 +36,7 @@ catkin_package(
     moveit_ros_planning
     moveit_ros_planning_interface
     rbdl_interface
+    kinova_msgs
 )
 
 include_directories(
