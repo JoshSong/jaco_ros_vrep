@@ -6,6 +6,7 @@ add_compile_options(-std=c++11)
 
 find_package(catkin REQUIRED COMPONENTS
   roscpp
+  roslib
   sensor_msgs
   control_msgs
   visualization_msgs
@@ -20,8 +21,10 @@ find_package(catkin REQUIRED COMPONENTS
 
 catkin_package(
   INCLUDE_DIRS include
+  LIBRARIES ${PROJECT_NAME}
   CATKIN_DEPENDS
     roscpp
+    roslib
     sensor_msgs
     control_msgs
     visualization_msgs
@@ -38,19 +41,28 @@ include_directories(
   ${catkin_INCLUDE_DIRS} include
 )
 
-add_library(VrepLib
+add_library(${PROJECT_NAME}
     src/VrepInterface.cpp
+    src/JacoRos.cpp
 )
-target_link_libraries(VrepLib ${catkin_LIBRARIES})
+target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES})
+
+add_library(JacoRos
+    src/JacoRos.cpp
+)
+target_link_libraries(JacoRos ${catkin_LIBRARIES})
 
 add_executable(vrep_interface src/VrepInterface.cpp)
 target_link_libraries(vrep_interface ${catkin_LIBRARIES})
 
 add_executable(force_control src/ForceControl.cpp)
-target_link_libraries(force_control ${catkin_LIBRARIES} VrepLib)
+target_link_libraries(force_control ${catkin_LIBRARIES} ${PROJECT_NAME})
 
 #add_executable(jaco_human_playback src/JacoHumanPlayback.cpp)
 #target_link_libraries(jaco_human_playback ${catkin_LIBRARIES} )
 
 #add_executable(moveit_interface src/MoveitInterface.cpp)
 #target_link_libraries(moveit_interface ${catkin_LIBRARIES} )
+
+add_executable(enable_torque src/EnableTorque.cpp)
+target_link_libraries(enable_torque ${catkin_LIBRARIES} ${PROJECT_NAME})

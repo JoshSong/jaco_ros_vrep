@@ -1,0 +1,4 @@
+<launch>
+  <include file="$(find kinova_bringup)/launch/kinova_robot.launch"/>
+  <node name="enable_torque" pkg="jaco_control" type="enable_torque" output="screen"/>
+</launch>
