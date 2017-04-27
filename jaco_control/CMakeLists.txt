@@ -68,3 +68,6 @@ target_link_libraries(force_control ${catkin_LIBRARIES} ${PROJECT_NAME})
 
 add_executable(enable_torque src/EnableTorque.cpp)
 target_link_libraries(enable_torque ${catkin_LIBRARIES} ${PROJECT_NAME})
+
+add_executable(gravity_z_estimation src/GravityZEstimation.cpp)
+target_link_libraries(gravity_z_estimation ${CMAKE_DL_LIBS})

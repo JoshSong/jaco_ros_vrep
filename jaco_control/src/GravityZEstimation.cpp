@@ -74,7 +74,7 @@ int main()
                 if (result == 1 && resultComm == 1)
                 {
                         // Choose robot type
-                        ROBOT_TYPE type = JACOV2_6DOF_ASSISTIVE;
+                        ROBOT_TYPE type = JACOV2_6DOF_SERVICE;
                         double OptimalzParam[OPTIMAL_Z_PARAM_SIZE];
                         // Run identification sequence
                         // CAUTION READ THE FUNCTION DOCUMENTATION BEFORE
