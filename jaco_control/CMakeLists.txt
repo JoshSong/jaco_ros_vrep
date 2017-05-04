@@ -16,8 +16,8 @@ find_package(catkin REQUIRED COMPONENTS
   moveit_core
   moveit_ros_planning
   moveit_ros_planning_interface
-  rbdl_interface
   kinova_msgs
+  kinova_driver
 )
 
 catkin_package(
@@ -35,8 +35,8 @@ catkin_package(
     moveit_core
     moveit_ros_planning
     moveit_ros_planning_interface
-    rbdl_interface
     kinova_msgs
+    kinova_driver
 )
 
 include_directories(
@@ -70,4 +70,4 @@ add_executable(enable_torque src/EnableTorque.cpp)
 target_link_libraries(enable_torque ${catkin_LIBRARIES} ${PROJECT_NAME})
 
 add_executable(gravity_z_estimation src/GravityZEstimation.cpp)
-target_link_libraries(gravity_z_estimation ${CMAKE_DL_LIBS})
+target_link_libraries(gravity_z_estimation ${catkin_LIBRARIES} ${CMAKE_DL_LIBS})

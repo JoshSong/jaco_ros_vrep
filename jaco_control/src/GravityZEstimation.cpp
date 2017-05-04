@@ -1,8 +1,8 @@
 #include <iostream>
 #include <dlfcn.h> //Ubuntu
-#include <KinovaTypes.h>
-#include <Kinova.API.CommLayerUbuntu.h>
-#include <Kinova.API.UsbCommandLayerUbuntu.h>
+#include <kinova/KinovaTypes.h>
+#include <kinova/Kinova.API.USBCommLayerUbuntu.h>
+#include <kinova/Kinova.API.USBCommandLayerUbuntu.h>
 #include <unistd.h>
 //Note that under windows, you may/will have to perform other #include
 using namespace std;
