@@ -120,11 +120,13 @@ void JacoRos::timerCb(const ros::TimerEvent& e) {
     mutex_.lock();
     ros::Duration d = ros::Time::now() - commandTime_;
     if (torqueModeEnabled_) {
+        // If msg is older than 0.25 sec set to zero
         if (d.toSec() > 0.250) {
             forceMsg_ = kinova_msgs::CartesianForce();
         }
         forcePub_.publish(forceMsg_);
     } else {
+        // If msg is older than 0.25 sec set to zero
         if (d.toSec() > 0.250) {
             velMsg_ = kinova_msgs::PoseVelocity();
         }
