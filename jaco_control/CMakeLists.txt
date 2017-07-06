@@ -57,6 +57,9 @@ target_link_libraries(JacoRos ${catkin_LIBRARIES})
 add_executable(vrep_interface src/VrepInterface.cpp)
 target_link_libraries(vrep_interface ${catkin_LIBRARIES})
 
+add_executable(vrep_ik_interface src/VrepIKInterface.cpp)
+target_link_libraries(vrep_ik_interface ${catkin_LIBRARIES})
+
 add_executable(force_control src/ForceControl.cpp)
 target_link_libraries(force_control ${catkin_LIBRARIES} ${PROJECT_NAME})
 
