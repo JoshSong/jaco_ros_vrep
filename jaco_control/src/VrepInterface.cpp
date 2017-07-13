@@ -11,9 +11,9 @@ extern "C" {
 }
 
 VrepInterface::VrepInterface() :
-        numArmJoints_(6), numFingerJoints_(3), feedbackRate_(50.0),
-        posUpdateRate_(50.0), clientID_(-1), torqueMode_(false), sync_(false),
-        calcTorque_(nullptr) {
+        numArmJoints_(6), numFingerJoints_(3), feedbackRate_(20.f),
+        posUpdateRate_(50.f), clientID_(-1), torqueMode_(false), sync_(false),
+        calcTorque_(nullptr), velMode_(false), validVel_(false) {
     // V-REP joint offsets and directions don't line up with urdf
     //jointOffsets_ = {M_PI, -1.5 * M_PI, 0.5 * M_PI, M_PI, M_PI, 1.5 * M_PI};
     //jointDirs_ = {-1, 1, -1, -1, -1, -1};
@@ -25,13 +25,14 @@ VrepInterface::VrepInterface() :
     for (std::size_t i = 0; i < maxVels_.size(); i++) {
         maxVels_[i] *= M_PI/180.f;
     }
-
 }
 
 VrepInterface::~VrepInterface() {
+    mutex_.lock();
     if (clientID_ != -1) {
         simxFinish(clientID_);
     }
+    mutex_.unlock();
 }
 
 void VrepInterface::setTorqueMode(TorqueCallback calcTorque) {
@@ -40,8 +41,14 @@ void VrepInterface::setTorqueMode(TorqueCallback calcTorque) {
     sync_ = true;
 }
 
+void VrepInterface::setVelMode(float stepTime) {
+    velMode_ = true;
+    velStepTime_ = stepTime;
+}
+
 void VrepInterface::initialize(ros::NodeHandle& n) {
     // Connect to V-REP via remote api
+    mutex_.lock();
     ROS_INFO("Waiting for valid time. Is V-REP running?");
     ros::Time::waitForValid();
     while(clientID_ == -1 && ros::ok()) {
@@ -51,12 +58,21 @@ void VrepInterface::initialize(ros::NodeHandle& n) {
         }
     }
     ROS_INFO("Connected to V-REP");
+    mutex_.unlock();
 
     // Enable synchronous mode if needed
     if (sync_) {
+        mutex_.lock();
         simxSynchronous(clientID_, true);
         simxSynchronousTrigger(clientID_);
         ROS_INFO("Enabled V-REP sync mode");
+        mutex_.unlock();
+    }
+
+    // Get dummy handle used for telling V-REP's IK target
+    if (velMode_) {
+        dummyHandle_ = getVrepHandle("Jaco_target#0");
+        dummyPos_ = getVrepPosition(dummyHandle_, true);
     }
 
     // Initialise jointState_ message with joint names and get V-REP handles
@@ -108,22 +124,56 @@ void VrepInterface::initialize(ros::NodeHandle& n) {
     trajAS_->start();
 }
 
+void VrepInterface::initialize() {
+    node_.reset(new ros::NodeHandle());
+    node_->setCallbackQueue(&callbackQueue_);
+    spinner_.reset(new ros::AsyncSpinner(1, &callbackQueue_));
+    initialize(*node_);
+    spinner_->start();
+}
+
 void VrepInterface::publishWorker(const ros::WallTimerEvent& e) {
     int ping;
     if (sync_) {
+        mutex_.lock();
         simxGetPingTime(clientID_, &ping);   // Block until step is done
+        mutex_.unlock();
     }
     updateJointState();
     publishJointInfo();
     if (torqueMode_) {
         std::vector<float> torques = calcTorque_(jointState_);
         if (!torques.empty()) {
-            setVrepTorque(torques);
+            setVrepJointTorque(torques);
         }
     }
-    if (sync_) {
-        simxSynchronousTrigger(clientID_);   // Trigger next simulation step
+    if (velMode_) {
+        updateTargetDummy();
     }
+    if (sync_) {
+        mutex_.lock();
+        simxSynchronousTrigger(clientID_);   // Trigger next simulation step
+        mutex_.unlock();
+    }
+}
+
+void VrepInterface::updateTargetDummy() {
+    mutex_.lock();
+    if (!validVel_) {
+        mutex_.unlock();
+        return;
+    }
+    ros::Duration d = ros::Time::now() - velTime_;
+    float t = d.toSec();
+    if (t > velStepTime_) {
+        t = velStepTime_;
+    }
+    float x = dummyPos_.x() + t * vel_.linear.x;
+    float y = dummyPos_.y() + t * vel_.linear.y;
+    float z = dummyPos_.z() + t * vel_.linear.z;
+    float newPos[3] = {x, y, z};
+    simxSetObjectPosition(clientID_, dummyHandle_, -1, newPos, simx_opmode_oneshot);
+    mutex_.unlock();
 }
 
 void VrepInterface::trajCB(
@@ -134,6 +184,7 @@ void VrepInterface::trajCB(
     ros::Time startTime = ros::Time::now();
     std::vector<double> startPos = jointState_.position;
     int i = 0;
+    ros::Rate rate(posUpdateRate_);
     while (ros::ok()) {
         // Check that preempt has not been requested by the client
         if (trajAS_->isPreemptRequested()) {
@@ -193,8 +244,8 @@ void VrepInterface::trajCB(
         // Cast to from doubles to floats
         std::vector<float> targetf(target.begin(), target.end());
 
-        setVrepPosition(targetf);
-        posUpdateRate_.sleep();
+        setVrepJointPosition(targetf);
+        rate.sleep();
     }
 }
 
@@ -209,18 +260,17 @@ bool VrepInterface::initJoints(std::string inPrefix, std::string outPrefix,
         } else {
             inName = inPrefix + std::to_string(i + 1) + "#" + std::to_string(suffixCode);
         }
-        int handle;
-        int code = simxGetObjectHandle(clientID_, inName.c_str(), &handle,
-                simx_opmode_blocking);
-        if (code != simx_return_ok) {
-            ROS_ERROR_STREAM("Get handle " << inName << " failed, code: " << code);
+        int handle = getVrepHandle(inName);
+        if (handle == -1) {
             return false;
         }
         jointHandles.push_back(handle);
 
         // Ask V-REP to send joint angles continuously from now on
         float pos;
+        mutex_.lock();
         simxGetJointPosition(clientID_, handle, &pos, simx_opmode_streaming);
+        mutex_.unlock();
 
         // Add joint's urdf name to jointState msg
         std::string outName = outPrefix + std::to_string(i + 1);
@@ -233,7 +283,7 @@ bool VrepInterface::initJoints(std::string inPrefix, std::string outPrefix,
 }
 
 void VrepInterface::updateJointState() {
-    std::vector<float> pos = getVrepPosition();
+    std::vector<float> pos = getVrepJointPosition();
     for (int i = 0; i < numArmJoints_; i++) {
         jointState_.position[i] = pos[i];
     }
@@ -249,14 +299,73 @@ void VrepInterface::publishJointInfo() {
     feedbackPub_.publish(feedback_);
 }
 
-std::vector<float> VrepInterface::getVrepPosition() {
+int VrepInterface::getVrepHandle(std::string name) {
+    mutex_.lock();
+    int handle;
+    int code = simxGetObjectHandle(clientID_, name.c_str(), &handle,
+            simx_opmode_blocking);
+    mutex_.unlock();
+    if (code != simx_return_ok) {
+        ROS_ERROR_STREAM("Get handle " << name << " failed, code: " << code);
+        return -1;
+    }
+    return handle;
+}
+
+tf::Vector3 VrepInterface::getVrepPosition(int handle, bool startStream) {
+    mutex_.lock();
+    float f[3];
+    if (startStream) {
+        simxGetObjectPosition(clientID_, handle, -1, f, simx_opmode_streaming);
+    } else {
+        simxGetObjectPosition(clientID_, handle, -1, f, simx_opmode_buffer);
+    }
+    mutex_.unlock();
+    return tf::Vector3(f[0], f[1], f[2]);
+}
+
+tf::Vector3 VrepInterface::getVrepOrientation(int handle, bool startStream) {
+    mutex_.lock();
+    float f[3];
+    if (startStream) {
+        simxGetObjectOrientation(clientID_, handle, -1, f, simx_opmode_streaming);
+    } else {
+        simxGetObjectOrientation(clientID_, handle, -1, f, simx_opmode_buffer);
+    }
+    mutex_.unlock();
+    return tf::Vector3(f[0], f[1], f[2]);
+}
+
+void VrepInterface::setVrepPosition(int handle, const tf::Vector3& v) {
+    mutex_.lock();
+    float f[3];
+    f[0] = v[0];
+    f[1] = v[1];
+    f[2] = v[2];
+    simxSetObjectPosition(clientID_, handle, -1, f, simx_opmode_oneshot);
+    mutex_.unlock();
+}
+
+void VrepInterface::setVrepOrientation(int handle, const tf::Vector3& v) {
+    mutex_.lock();
+    float f[3];
+    f[0] = v[0];
+    f[1] = v[1];
+    f[2] = v[2];
+    simxSetObjectOrientation(clientID_, handle, -1, f, simx_opmode_oneshot);
+    mutex_.unlock();
+}
+
+std::vector<float> VrepInterface::getVrepJointPosition() {
     std::vector<float> result(numArmJoints_, 0.0);
     for (int i = 0; i < numArmJoints_; i++) {
         float pos;
+        mutex_.lock();
         int code = simxGetJointPosition(clientID_, jointHandles_[i], &pos,
                 simx_opmode_buffer);
+        mutex_.unlock();
         if (code != simx_return_ok) {
-            ROS_ERROR_STREAM("getVrepPosition error code: " << code);
+            ROS_ERROR_STREAM("getVrepJointPosition error code: " << code);
         }
         pos = jointDirs_[i] * pos + jointOffsets_[i];
         result[i] = pos;
@@ -264,9 +373,10 @@ std::vector<float> VrepInterface::getVrepPosition() {
     return result;
 }
 
-void VrepInterface::setVrepTorque(const std::vector<float>& targets) {
+void VrepInterface::setVrepJointTorque(const std::vector<float>& targets) {
     for (int i = 0; i < numArmJoints_; i++) {
         float torque = std::max(maxTorques_[i], std::abs(targets[i]));
+        mutex_.lock();
         simxSetJointForce(clientID_, jointHandles_[i], torque,
                 simx_opmode_oneshot);
         float velDir;
@@ -279,30 +389,46 @@ void VrepInterface::setVrepTorque(const std::vector<float>& targets) {
         }
         simxSetJointTargetVelocity(clientID_, jointHandles_[i], velDir,
                 simx_opmode_oneshot);
+        mutex_.unlock();
     }
 }
 
-void VrepInterface::setVrepPosition(const std::vector<float>& targets) {
+void VrepInterface::setVrepJointPosition(const std::vector<float>& targets) {
+    mutex_.lock();
     for (int i = 0; i < numArmJoints_; i++) {
         // Transform to V-REP convention
         float target = jointDirs_[i] * (targets[i] - jointOffsets_[i]);
         simxSetJointTargetPosition(clientID_, jointHandles_[i], target,
                 simx_opmode_oneshot);
     }
+    mutex_.unlock();
+}
+
+void VrepInterface::setVrepEefVel(geometry_msgs::Twist vel) {
+    dummyPos_ = getVrepPosition(dummyHandle_, false);
+    mutex_.lock();
+    vel_ = vel;
+    velTime_ = ros::Time::now();
+    validVel_ = true;
+    mutex_.unlock();
 }
 
 void VrepInterface::disableVrepControl() {
+    mutex_.lock();
     for (int i = 0; i < numArmJoints_; i++) {
         simxSetObjectIntParameter(clientID_, jointHandles_[i],
                 sim_jointintparam_ctrl_enabled, 0, simx_opmode_oneshot);
     }
+    mutex_.unlock();
 }
 
 void VrepInterface::enableVrepControl() {
+    mutex_.lock();
     for (int i = 0; i < numArmJoints_; i++) {
         simxSetObjectIntParameter(clientID_, jointHandles_[i],
                 sim_jointintparam_ctrl_enabled, 1, simx_opmode_oneshot);
     }
+    mutex_.unlock();
 }
 
 std::vector<double> VrepInterface::interpolate(const std::vector<double>& last,
@@ -314,13 +440,12 @@ std::vector<double> VrepInterface::interpolate(const std::vector<double>& last,
     }
     return intermediate;
 }
+
+// This is here for running as a standalone node
 int main(int argc, char **argv) {
     ros::init(argc, argv, "vrep_interface");
-    ros::NodeHandle n;
     VrepInterface vrep;
-    vrep.initialize(n);
-    ros::AsyncSpinner spinner(0);
-    spinner.start();
+    vrep.initialize();
     ros::waitForShutdown();
     return 0;
 }
