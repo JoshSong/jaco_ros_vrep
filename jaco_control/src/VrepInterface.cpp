@@ -73,6 +73,7 @@ void VrepInterface::initialize(ros::NodeHandle& n) {
     if (velMode_) {
         dummyHandle_ = getVrepHandle("Jaco_target#0");
         dummyPos_ = getVrepPosition(dummyHandle_, true);
+        dummyAng_ = getVrepOrientation(dummyHandle_, true);
     }
 
     // Initialise jointState_ message with joint names and get V-REP handles
@@ -168,12 +169,20 @@ void VrepInterface::updateTargetDummy() {
     if (t > velStepTime_) {
         t = velStepTime_;
     }
-    float x = dummyPos_.x() + t * vel_.linear.x;
-    float y = dummyPos_.y() + t * vel_.linear.y;
-    float z = dummyPos_.z() + t * vel_.linear.z;
-    float newPos[3] = {x, y, z};
-    simxSetObjectPosition(clientID_, dummyHandle_, -1, newPos, simx_opmode_oneshot);
+    tf::Vector3 linVel;
+    tf::vector3MsgToTF(vel_.linear, linVel);
+    tf::Vector3 newPos = dummyPos_ + t * linVel;
+
+    tf::Vector3 angVel;
+    tf::vector3MsgToTF(vel_.angular, angVel);
+    tf::Vector3 newAng = dummyAng_ + t * angVel;
+    newAng[0] = normAngle(newAng[0]);
+    newAng[1] = normAngle(newAng[1]);
+    newAng[2] = normAngle(newAng[2]);
     mutex_.unlock();
+
+    setVrepPosition(dummyHandle_, newPos);
+    setVrepOrientation(dummyHandle_, newAng);
 }
 
 void VrepInterface::trajCB(
@@ -406,6 +415,7 @@ void VrepInterface::setVrepJointPosition(const std::vector<float>& targets) {
 
 void VrepInterface::setVrepEefVel(geometry_msgs::Twist vel) {
     dummyPos_ = getVrepPosition(dummyHandle_, false);
+    dummyAng_ = getVrepOrientation(dummyHandle_, false);
     mutex_.lock();
     vel_ = vel;
     velTime_ = ros::Time::now();
@@ -439,6 +449,16 @@ std::vector<double> VrepInterface::interpolate(const std::vector<double>& last,
         intermediate.push_back(last[i] + alpha * (current[i] - last[i]));
     }
     return intermediate;
+}
+
+double VrepInterface::normAngle(double a) {
+    while (a <= -M_PI) {
+        a += 2 * M_PI;
+    }
+    while (a > M_PI) {
+        a -= 2 * M_PI;
+    }
+    return a;
 }
 
 // This is here for running as a standalone node

@@ -98,6 +98,9 @@ private:
     std::vector<double> interpolate( const std::vector<double>& last,
             const std::vector<double>& current, double alpha);
 
+    /** Set angle between -M_PI and M_PI radians */
+    double normAngle(double a);
+
     /** ROS actionlib server for trajectory commands */
     std::unique_ptr<actionlib::SimpleActionServer<control_msgs::FollowJointTrajectoryAction>> trajAS_;
 
@@ -125,8 +128,9 @@ private:
     /** Last velocity command received */
     geometry_msgs::Twist vel_;
     bool validVel_;
-    /** Position of dummy */
+    /** Position and orientation of dummy */
     tf::Vector3 dummyPos_;
+    tf::Vector3 dummyAng_;
     /** Time at last vel command */
     ros::Time velTime_;
     /** Stores joint state */
