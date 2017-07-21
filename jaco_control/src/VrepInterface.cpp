@@ -321,24 +321,34 @@ int VrepInterface::getVrepHandle(std::string name) {
     return handle;
 }
 
-tf::Vector3 VrepInterface::getVrepPosition(int handle, bool startStream) {
+tf::Vector3 VrepInterface::getVrepPosition(int handle, int mode) {
     mutex_.lock();
     float f[3];
-    if (startStream) {
+    switch (mode) {
+    case 0:
+        simxGetObjectPosition(clientID_, handle, -1, f, simx_opmode_blocking);
+        break;
+    case 1:
         simxGetObjectPosition(clientID_, handle, -1, f, simx_opmode_streaming);
-    } else {
+        break;
+    case 2:
         simxGetObjectPosition(clientID_, handle, -1, f, simx_opmode_buffer);
     }
     mutex_.unlock();
     return tf::Vector3(f[0], f[1], f[2]);
 }
 
-tf::Vector3 VrepInterface::getVrepOrientation(int handle, bool startStream) {
+tf::Vector3 VrepInterface::getVrepOrientation(int handle, int mode) {
     mutex_.lock();
     float f[3];
-    if (startStream) {
+    switch (mode) {
+    case 0:
+        simxGetObjectOrientation(clientID_, handle, -1, f, simx_opmode_blocking);
+        break;
+    case 1:
         simxGetObjectOrientation(clientID_, handle, -1, f, simx_opmode_streaming);
-    } else {
+        break;
+    case 2:
         simxGetObjectOrientation(clientID_, handle, -1, f, simx_opmode_buffer);
     }
     mutex_.unlock();

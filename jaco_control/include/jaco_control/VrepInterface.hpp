@@ -49,8 +49,10 @@ public:
 
     /** V-REP remote api wrappers */
     int getVrepHandle(std::string name);
-    tf::Vector3 getVrepPosition(int handle, bool startStream);
-    tf::Vector3 getVrepOrientation(int handle, bool startStream);
+    /** Get position/orientation. Mode is 0 for blocking, 1 is to start stream,
+     *  2 is if stream is already started. */
+    tf::Vector3 getVrepPosition(int handle, int mode);
+    tf::Vector3 getVrepOrientation(int handle, int mode);
     void setVrepPosition(int handle, const tf::Vector3& v);
     void setVrepOrientation(int handle, const tf::Vector3& v);
 
